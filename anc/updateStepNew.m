@@ -1,4 +1,5 @@
-function [lambdau,xu,Pu,wupd,rupd,xupd,Pupd,wnew,rnew,xnew,Pnew] = updateStepNew(lambdau,xu,Pu,r,x,P,z,model)
+function [lambdau,xu,Pu,wupd,rupd,xupd,Pupd,lupd,aupd,cupd,wnew,rnew,xnew,Pnew,lnew,cnew] = ...
+    updateStepNew(lambdau,xu,Pu,r,x,P,l,c,z,model)
 %UPDATE: CONSTRUCT COMPONENTS OF DISTRIBUTION UPDATED WITH MEASUREMENTS
 %Syntax: [lambdau,xu,Pu,wupd,rupd,xupd,Pupd,wnew,rnew,xnew,Pnew] =
 %          update(lambdau,xu,Pu,r,x,P,z,model)
@@ -30,12 +31,22 @@ wupd = zeros(n*(m+1),1);
 rupd = zeros(n*(m+1),1);
 xupd = zeros(stateDimensions,n*(m+1));
 Pupd = zeros(stateDimensions,stateDimensions,n*(m+1));
+lupd = cell(n*(m+1),1);
+cupd = zeros(n*(m+1),1);
+% Keep record ancestor information, used in N-scan pruning
+% Currently, only the latest ancestor information is recorded
+aupd = zeros(n*(m+1),1);
 
 % Allocate memory for new tracks
 wnew = zeros(2*m,1);
 rnew = zeros(2*m,1);
 xnew = zeros(stateDimensions,2*m);
 Pnew = zeros(stateDimensions,stateDimensions,2*m);
+lnew = cell(2*m,1);
+cnew = zeros(2*m,1);
+
+% No need to record new track ancestor
+% anew = zeros(2*m,1);
 
 % Allocate temporary working for new tracks
 Sk = zeros(measDimensions,measDimensions,nu);
@@ -54,6 +65,10 @@ for i = 1:n
     rupd((i-1)*m+i) = r(i)*(1-Pd)/wupd((i-1)*m+i);
     xupd(:,(i-1)*m+i) = x(:,i);
     Pupd(:,:,(i-1)*m+i) = P(:,:,i);
+    % If it is missed detection, add label 0
+    lupd{(i-1)*m+i} = [l{i};0];
+    aupd((i-1)*m+i) = i;
+    cupd((i-1)*m+i) = c(i)-log(wupd((i-1)*m+i));
     
     % Create hypotheses with measurement updates
     S = H*P(:,:,i)*H' + R;
@@ -66,7 +81,16 @@ for i = 1:n
         rupd(m*i-m+i+j) = 1;
         xupd(:,m*i-m+i+j) = x(:,i) + K*v;
         Pupd(:,:,m*i-m+i+j) = Pplus;
+        % Otherwise, add the index of the measurement at current scan
+        lupd{m*i-m+i+j} = [l{i};j];
+        aupd(m*i-m+i+j) = i;
+        
+        if wupd(m*i-m+i+j)==0
+            wupd(m*i-m+i+j) = realmin;
+        end
+        cupd(m*i-m+i+j) = c(i)-log(wupd(m*i-m+i+j));
     end
+    
 end
 
 % Create a new track for each measurement by updating PPP with measurement
@@ -94,7 +118,11 @@ for j = 1:m
         v = xnew(:,2*j) - yk(:,k);
         Pnew(:,:,2*j) = Pnew(:,:,2*j) + ck(k)*(Pk(:,:,k) + v*v');
     end
+    % for trajectory purpose
+    lnew{2*j-1} = 0;    % add 0, if there is no new target
+    lnew{2*j} = j;      % otherwise, add measurement index
 end
+cnew = -log(wnew);
 
 % Update (i.e., thin) intensity of unknown targets
 lambdau = (1-Pd)*lambdau;

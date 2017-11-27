@@ -23,6 +23,9 @@ n = 0;
 r = zeros(n,1);
 x = zeros(stateDimensions,n);
 P = zeros(stateDimensions,stateDimensions,n);
+l = cell(n,1);  % store trajectory
+c = zeros(n,1); % store the cost of each single target hypothesis
+
 % Unknown target PPP parameters
 lambdau = model.lambdau;
 xu = model.xb;
@@ -44,20 +47,38 @@ for t = 1:numTime
     [r,x,P,lambdau,xu,Pu] = predictStep(r,x,P,lambdau,xu,Pu,model);
     
     % Predict all single target hypotheses of previous scan
+    % No need to update trajectory label, cost
+    
+    
     
     % Update
-    [lambdau,xu,Pu,wupd,rupd,xupd,Pupd,wnew,rnew,xnew,Pnew] = ...
-        updateStepNew(lambdau,xu,Pu,r,x,P,measlog{t},model);
+    [lambdau,xu,Pu,wupd,rupd,xupd,Pupd,lupd,aupd,cupd,wnew,rnew,xnew,Pnew,lnew,cnew] = ...
+        updateStepNew(lambdau,xu,Pu,r,x,P,l,c,measlog{t},model);
     
     % Update all predicted single target hypotheses of previous scan
+    
+    % Data assciation
+    [r,x,P,aselect] = dataAssocNew(wupd,rupd,xupd,Pupd,aupd,wnew,rnew,xnew,Pnew);
+    
+    % N(one)-scan pruning
+    I = ismember(aupd,aselect); % get index of elements that can be retained
+    wupd = wupd(I);
+    rupd = rupd(I);
+    xupd = xupd(:,I);
+    Pupd = Pupd(:,:,I);
+    lupd = lupd(I);
+    cupd = cupd(I);
     
     % Store single target hypotheses of current scan, send to next scan
     % Order: missed detection, single target hypotheses updated by the
     % first, second, third,..., measurement, followed by single target
     % hypothese of newly detected targets
-
-    % Data assciation
-    [r,x,P] = dataAssocNew(wupd,rupd,xupd,Pupd,wnew,rnew,xnew,Pnew);
+    wpre = [wupd;wnew];
+    rpre = [rupd;rnew];
+    xpre = [xupd xnew];
+    Ppre = cat(3,Pupd,Pnew);
+    lpre = {lupd;lnew};
+    cpre = [cupd;cnew];
 
     % Target state extraction
     xest{t} = stateExtract(r,x,model);

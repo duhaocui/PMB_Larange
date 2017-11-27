@@ -1,4 +1,4 @@
-function [r,x,P] = dataAssocNew(wupd,rupd,xupd,Pupd,wnew,rnew,xnew,Pnew)
+function [r,x,P,a] = dataAssocNew(wupd,rupd,xupd,Pupd,aupd,wnew,rnew,xnew,Pnew)
 
 m = length(wnew)/2;     % m: num of measurements
 n = length(wupd)/(m+1); % n: num of pre-existing tracks
@@ -10,7 +10,7 @@ c = zeros(H,1);         % cost of single target hypotheses
 % equal to one, hence zero cost
 wupd(wupd==0) = realmin;
 c(1:n*(m+1)) = -log(wupd);     % cost of hypotheses of pre-existing tracks
-c(n*(m+1)+1:end) = -log(wnew);       % cost of hypotheses of new tracks
+c(n*(m+1)+1:end) = -log(wnew); % cost of hypotheses of new tracks
 
 % construct binary indicator matrix, with size (n+2m, nm+n+2m)
 A = zeros(n+2*m,H);
@@ -41,6 +41,9 @@ I = u(1:n*(m+1))==1;
 r = rupd(I);
 x = xupd(:,I);
 P = Pupd(:,:,I);
+
+% Searching for ancester labels of selected hypotheses, used for N-scan pruning
+a = aupd(I);
 
 % single target hypotheses updating new tracks
 I = u(n*(m+1)+1:end)==1;

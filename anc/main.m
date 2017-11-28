@@ -43,51 +43,48 @@ gospa_alpha = 2;
 
 % Two scan
 for t = 1:numTime
+    %%
     % Predict
-    [r,x,P,lambdau,xu,Pu] = predictStep(r,x,P,lambdau,xu,Pu,model);
+%     [r,x,P,lambdau,xu,Pu] = predictStep(r,x,P,lambdau,xu,Pu,model);
     
     % Predict all single target hypotheses of previous scan
     % No need to update trajectory label, cost
+    [r,x,P,lambdau,xu,Pu] = predictStep(r,x,P,lambdau,xu,Pu,model);
     
-    
-    
+    %%
     % Update
-    [lambdau,xu,Pu,wupd,rupd,xupd,Pupd,lupd,aupd,cupd,wnew,rnew,xnew,Pnew,lnew,cnew] = ...
-        updateStepNew(lambdau,xu,Pu,r,x,P,l,c,measlog{t},model);
+%     [lambdau,xu,Pu,wupd,rupd,xupd,Pupd,lupd,aupd,cupd,wnew,rnew,xnew,Pnew,lnew,cnew] = ...
+%         updateStepNew(lambdau,xu,Pu,r,x,P,lpre,cpre,measlog{t},model);
     
     % Update all predicted single target hypotheses of previous scan
+    [lambdau,xu,Pu,rupd,xupd,Pupd,lupd,aupd,cupd,rnew,xnew,Pnew,lnew,cnew] = ...
+        updateStepNew2(lambdau,xu,Pu,r,x,P,l,c,measlog{t},model);
     
+    %%
     % Data assciation
-    [r,x,P,aselect] = dataAssocNew(wupd,rupd,xupd,Pupd,aupd,wnew,rnew,xnew,Pnew);
+%     [r,x,P,aselect] = dataAssocNew(wupd,rupd,xupd,Pupd,aupd,wnew,rnew,xnew,Pnew);
     
-    % N(one)-scan pruning
-    I = ismember(aupd,aselect); % get index of elements that can be retained
-    wupd = wupd(I);
-    rupd = rupd(I);
-    xupd = xupd(:,I);
-    Pupd = Pupd(:,:,I);
-    lupd = lupd(I);
-    cupd = cupd(I);
+    % multi(two)-scan data association
+    [r_hat,x_hat,P_hat,cupd,rupd,xupd,Pupd,lupd] = dataAssocNew2(cupd,rupd,xupd,Pupd,aupd,lupd,cnew,rnew,xnew,Pnew,lnew);
     
     % Store single target hypotheses of current scan, send to next scan
     % Order: missed detection, single target hypotheses updated by the
     % first, second, third,..., measurement, followed by single target
     % hypothese of newly detected targets
-    wpre = [wupd;wnew];
-    rpre = [rupd;rnew];
-    xpre = [xupd xnew];
-    Ppre = cat(3,Pupd,Pnew);
-    lpre = {lupd;lnew};
-    cpre = [cupd;cnew];
+    r = [rupd;rnew];
+    x = [xupd xnew];
+    P = cat(3,Pupd,Pnew);
+    l = cat(1,lupd,lnew);
+    c = [cupd;cnew];
 
-    % Target state extraction
-    xest{t} = stateExtract(r,x,model);
-    
     % Pruning
-    [r,x,P] = Pruning(r,x,P);
+%     [r,x,P] = Pruning(r,x,P);
     
     % Recycling
-    [r,x,P,lambdau,xu,Pu] = Recycling(r,x,P,lambdau,xu,Pu);
+%     [r,x,P,lambdau,xu,Pu] = Recycling(r,x,P,lambdau,xu,Pu);
+    
+    % Target state extraction
+    xest{t} = stateExtract(r_hat,x_hat,model);
     
     % Performance evaluation using GOSPA metric
     [gospa_vals(t,:)] = gospa_dist(get_comps(xlog{t},[1 3]),...

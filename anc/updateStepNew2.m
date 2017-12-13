@@ -1,5 +1,5 @@
-function [lambdau,xu,Pu,rupd,xupd,Pupd,lupd,aupd,cupd,rnew,xnew,Pnew,lnew,cnew] = ...
-    updateStepNew2(lambdau,xu,Pu,r,x,P,l,c,z,model)
+function [lambdau,xu,Pu,rupd,xupd,Pupd,lupd,cupd,rnew,xnew,Pnew,lnew,cnew,aupd,anew] = ...
+    updateStepNew2(lambdau,xu,Pu,r,x,P,l,c,z,a,model)
 %UPDATE: CONSTRUCT COMPONENTS OF DISTRIBUTION UPDATED WITH MEASUREMENTS
 %Syntax: [lambdau,xu,Pu,wupd,rupd,xupd,Pupd,wnew,rnew,xnew,Pnew] =
 %          update(lambdau,xu,Pu,r,x,P,z,model)
@@ -28,7 +28,7 @@ n = length(r);  % number of single target hypotheses to be updated
 % length(r)=length(find(r~=0))+length(find(r==0))
 nupd = length(find(r~=0))*m + length(r); 
 
-% Allocate memory for existing tracks
+% Allocate memory for existing tracks (single target hypotheses)
 % Note no gating--assume any measurement can go with any track
 % Obviously this would be done differently in practice
 wupd = zeros(nupd,1);
@@ -41,14 +41,6 @@ cupd = zeros(nupd,1);
 % hypothesis being updated, can be used in N-scan pruning
 % Currently, only the latest ancestor information is recorded, i.e., 1-scan
 aupd = zeros(nupd,1);
-
-% Allocate memory for new tracks, each new track contains two single target
-% hypothese
-wnew = zeros(2*m,1);
-rnew = zeros(2*m,1);
-xnew = zeros(stateDimensions,2*m);
-Pnew = zeros(stateDimensions,stateDimensions,2*m);
-lnew = cell(2*m,1);
 
 % No need to record new track ancestor
 % anew = zeros(2*m,1);
@@ -68,7 +60,7 @@ for i = 1:n
         xupd(:,iupd) = zeros(stateDimensions,1);
         Pupd(:,:,iupd) = zeros(stateDimensions,stateDimensions,1);
         lupd{iupd} = [l{i};0];
-        aupd(iupd) = i;
+        aupd(iupd) = a(i);
     else
         % Create missed detection hypothesis
         iupd = iupd+1;
@@ -79,7 +71,7 @@ for i = 1:n
         Pupd(:,:,iupd) = P(:,:,i);
         % If it is missed detection, add label 0
         lupd{iupd} = [l{i};0];
-        aupd(iupd) = i;
+        aupd(iupd) = a(i);
         
         % Create hypotheses with measurement updates
         S = H*P(:,:,i)*H' + R;
@@ -91,19 +83,37 @@ for i = 1:n
             v = z(:,j) - H*x(:,i);
             wupd(iupd) = r(i)*Pd*exp(-0.5*v'/S*v)/sqrt_det2piS;
             % avoid numerical error
-            if wupd(iupd)==0
-                wupd(iupd) = realmin;
-            end
+%             if wupd(iupd)==0
+%                 wupd(iupd) = realmin;
+%             end
             cupd(iupd) = c(i)-log(wupd(iupd));
             rupd(iupd) = 1;
             xupd(:,iupd) = x(:,i) + K*v;
             Pupd(:,:,iupd) = Pplus;
             % Otherwise, add the index of the measurement at current scan
             lupd{iupd} = [l{i};j];
-            aupd(iupd) = i;
+            aupd(iupd) = a(i);
         end
     end
 end
+
+% Prune zero likelihood single target hypothesis
+idx_keep = wupd>0;
+rupd = rupd(idx_keep);
+xupd = xupd(:,idx_keep);
+Pupd = Pupd(:,:,idx_keep);
+lupd = lupd(idx_keep);
+cupd = cupd(idx_keep);
+aupd = aupd(idx_keep);
+
+% Allocate memory for new tracks, each new track contains two single target
+% hypothese
+wnew = zeros(2*m,1);
+rnew = zeros(2*m,1);
+xnew = zeros(stateDimensions,2*m);
+Pnew = zeros(stateDimensions,stateDimensions,2*m);
+lnew = cell(2*m,1);
+anew = zeros(2*m,1);
 
 % Allocate temporary working for new tracks
 Sk = zeros(measDimensions,measDimensions,nu);
@@ -141,8 +151,23 @@ for j = 1:m
     % for trajectory purpose
     lnew{2*j-1} = 0;    % add 0, if there is no new target
     lnew{2*j} = j;      % otherwise, add measurement index
+    if isempty(aupd)
+        anew(2*j-1:2*j) = j;
+    else  
+        anew(2*j-1:2*j) = aupd(end)+j;
+    end
 end
 cnew = -log(wnew);
+
+% If there is no pre-existing track, no need to create non-exist hypothesis
+if isempty(rupd)
+    rnew = rnew(2:2:end);
+    xnew = xnew(:,2:2:end);
+    Pnew = Pnew(:,:,2:2:end);
+    lnew = lnew(2:2:end);
+    cnew = cnew(2:2:end);
+    anew = anew(2:2:end);
+end
 
 % Update (i.e., thin) intensity of unknown targets
 lambdau = (1-Pd)*lambdau;

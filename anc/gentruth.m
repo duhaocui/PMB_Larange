@@ -54,7 +54,7 @@ model.existThresh = 0.5;
 % Initialise new target parameter structure
 model.xb = zeros(4,1);
 model.Pb = diag([100 1 100 1].^2);
-model.lambdau = 10; % initially expect 10 targets present (regardless of true number)
+model.lambdau = 1; % initially expect 10 targets present (regardless of true number)
 volume = 200*200;
 model.lambdab = 0.05; % expect one new target to arrive every 20 scans on average
 model.lfai = lfai; % expected number of false alarms (integral of lambda_fa)

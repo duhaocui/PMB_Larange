@@ -2,9 +2,9 @@ clc;clear
 dbstop if error
 
 % Set simulation parameters
-Pd = 0.5; % probability of detection
-lfai = 10; % expected number of false alarms per scan
-numtruth = 2; % number of targets
+Pd = 0.7; % probability of detection
+lfai = 2; % expected number of false alarms per scan
+numtruth = 3; % number of targets
 simcasenum = 1; % simulation case 1 or 2 (see paper)
 %simcasenum = 2;
 if (simcasenum == 1) % covariance used for mid-point initialisation
@@ -25,7 +25,7 @@ x = zeros(stateDimensions,n);
 P = zeros(stateDimensions,stateDimensions,n);
 l = cell(n,1);  % store trajectory
 c = zeros(n,1); % store the cost of each single target hypothesis
-
+a = zeros(n,1);
 % Unknown target PPP parameters
 lambdau = model.lambdau;
 xu = model.xb;
@@ -57,15 +57,16 @@ for t = 1:numTime
 %         updateStepNew(lambdau,xu,Pu,r,x,P,lpre,cpre,measlog{t},model);
     
     % Update all predicted single target hypotheses of previous scan
-    [lambdau,xu,Pu,rupd,xupd,Pupd,lupd,aupd,cupd,rnew,xnew,Pnew,lnew,cnew] = ...
-        updateStepNew2(lambdau,xu,Pu,r,x,P,l,c,measlog{t},model);
+    [lambdau,xu,Pu,rupd,xupd,Pupd,lupd,cupd,rnew,xnew,Pnew,lnew,cnew,aupd,anew] = ...
+        updateStepNew2(lambdau,xu,Pu,r,x,P,l,c,measlog{t},a,model);
     
     %%
     % Data assciation
 %     [r,x,P,aselect] = dataAssocNew(wupd,rupd,xupd,Pupd,aupd,wnew,rnew,xnew,Pnew);
     
     % multi(two)-scan data association
-    [r_hat,x_hat,P_hat,cupd,rupd,xupd,Pupd,lupd] = dataAssocNew2(cupd,rupd,xupd,Pupd,aupd,lupd,cnew,rnew,xnew,Pnew,lnew);
+    [r_hat,x_hat,P_hat,cupd,rupd,xupd,Pupd,lupd,lambdau,xu,Pu,aupd] = ...
+        dataAssocNew3(cupd,rupd,xupd,Pupd,lupd,cnew,rnew,xnew,Pnew,lnew,lambdau,xu,Pu,aupd);
     
     % Store single target hypotheses of current scan, send to next scan
     % Order: missed detection, single target hypotheses updated by the
@@ -76,6 +77,7 @@ for t = 1:numTime
     P = cat(3,Pupd,Pnew);
     l = cat(1,lupd,lnew);
     c = [cupd;cnew];
+    a = [aupd;anew];
 
     % Pruning
 %     [r,x,P] = Pruning(r,x,P);

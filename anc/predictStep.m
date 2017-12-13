@@ -43,7 +43,7 @@ nu = length(lambdau);
 
 % Implement prediction algorithm
 
-% Predict existing tracks
+% Predict existing tracks (single target hypotheses)
 for i = 1:n
     r(i) = Ps*r(i);
     x(:,i) = F*x(:,i);

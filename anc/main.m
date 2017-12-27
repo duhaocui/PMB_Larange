@@ -2,8 +2,8 @@ clc;clear
 dbstop if error
 
 % Set simulation parameters
-Pd = 0.7; % probability of detection
-lfai = 2; % expected number of false alarms per scan
+Pd = 0.9; % probability of detection
+lfai = 5; % expected number of false alarms per scan
 numtruth = 3; % number of targets
 simcasenum = 1; % simulation case 1 or 2 (see paper)
 %simcasenum = 2;
@@ -66,7 +66,7 @@ for t = 1:numTime
     
     % multi(two)-scan data association
     [r_hat,x_hat,P_hat,cupd,rupd,xupd,Pupd,lupd,lambdau,xu,Pu,aupd] = ...
-        dataAssocNew3(cupd,rupd,xupd,Pupd,lupd,cnew,rnew,xnew,Pnew,lnew,lambdau,xu,Pu,aupd);
+        dataAssocNew4(cupd,rupd,xupd,Pupd,lupd,cnew,rnew,xnew,Pnew,lnew,lambdau,xu,Pu,aupd,t);
     
     % Store single target hypotheses of current scan, send to next scan
     % Order: missed detection, single target hypotheses updated by the
@@ -91,4 +91,6 @@ for t = 1:numTime
     % Performance evaluation using GOSPA metric
     [gospa_vals(t,:)] = gospa_dist(get_comps(xlog{t},[1 3]),...
         get_comps(xest{t},[1 3]),gospa_c,gospa_p,gospa_alpha);
+    
+    gospa_vals(t,:)
 end

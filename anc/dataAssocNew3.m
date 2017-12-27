@@ -1,5 +1,5 @@
 function [r,x,P,cupd,rupd,xupd,Pupd,lupd,lambdau,xu,Pu,aupd] = dataAssocNew3...
-    (cupd,rupd,xupd,Pupd,lupd,cnew,rnew,xnew,Pnew,lnew,lambdau,xu,Pu,aupd)
+    (cupd,rupd,xupd,Pupd,lupd,cnew,rnew,xnew,Pnew,lnew,lambdau,xu,Pu,aupd,it)
 
 Hpre = length(cupd);        % num of single target hypotheses updating pre-existing tracks
 Hnew = length(cnew);        % num of single target hypotheses updating new tracks
@@ -103,13 +103,14 @@ for tl = 2:maxtralen
 end
 
 A = A(~cellfun('isempty',A));
+b = b(~cellfun('isempty',b));
 maxtralen = length(A);
 
-% options = optimoptions('intlinprog','Display','off');
+options = optimoptions('intlinprog','Display','off');
 % u = intlinprog(c,1:length(c),[],[],[A0;At],[b0;bt],zeros(length(c),1),ones(length(c),1),[],options);
 
 %%
-
+if 1
 % dual decomposition, solution is a binary indicator vector, decides which
 % single target hypotheses are included in the "best" global hypotheses.
 
@@ -128,69 +129,78 @@ maxIteration = 1e3;
 while (numIteration<maxIteration)
     % get suboptimal solution for each subproblem
     for tl = 1:maxtralen
-%         u_hat(:,tl) = intlinprog((c/maxtralen+delta(:,tl)),1:length(c),[],[],...
-%             [A0;A{tl}],[b0;b{tl}],zeros(length(c),1),ones(length(c),1),[],options);
-        c_hat = c/maxtralen+delta(:,tl);
-        % get number of measurements at scan tl
-        num_meas = size(A{tl},1);
-        % construct track to measurement assignment matrix at scan tl 
-        cost = zeros(npre+mcur,num_meas);
-        % store assignment index of the single target hypothesis with the
-        % minimum cost in each track
-        idxCost = zeros(npre+mcur,num_meas);
-        for j = 1:num_meas
-            idx = 0;
-            for i = 1:npre
-                is = find(A{tl}(j,idx+1:idx+ns(i))==1);
-                if isempty(is)
-                    % Not found
-                    cost(i,j) = inf;
-                else
-                    % if found, find the single target hypothesis with the
-                    % minimum cost, and record its index
-                    [cost(i,j),idxmin] = min(c_hat(idx+is));
-                    idxCost(i,j) = idx+is(idxmin);
-                end
-                idx = idx+ns(i);
-            end
-            for i = npre+1:npre+mcur
-                is = find(A{tl}(j,idx+1:idx+2)==1);
-                if isempty(is)
-                    cost(i,j) = inf;
-                else
-                    [cost(i,j),idxmin] = min(c_hat(idx+is));
-                    idxCost(i,j) = idx+is(idxmin);
-                end
-                idx = idx+2;
-            end
-        end
-        % find the most likely assignment
-        [assignments,~] = murty_custom(cost-min(cost(:)),1);
-        indicator = [];
-        for i = 1:npre+mcur
-            if assignments(i) > 0
-                indicator = cat(1,indicator,idxCost(i,assignments(i)));
-            end
-        end
-        % if a track has no measurement assigned to it, choose the single
-        % target hypotheses with the minimum cost (either, non-exist or miss)
-        utemp = zeros(H,1);
-        utemp(indicator) = 1;
-        idx = 0;
-        for i = 1:npre
-            if ~any(utemp(idx+1:idx+ns(i)))
-                [~,idxmin] = min(c(idx+1:idx+ns(i)));
-                utemp(idx+idxmin) = 1;
-            end
-            idx = idx+ns(i);
-        end
-        for i = 1:mcur
-            if ~any(utemp(idx+1:idx+2))
-                utemp(idx+1) = 1;
-            end
-            idx = idx+2;
-        end
-        u_hat(:,tl) = utemp;
+        u_hat(:,tl) = intlinprog((c/maxtralen+delta(:,tl)),1:length(c),[],[],...
+            [A0;A{tl}],[b0;b{tl}],zeros(length(c),1),ones(length(c),1),[],options);
+        
+%         c_hat = c/maxtralen+delta(:,tl);
+%         % get number of measurements at scan tl
+%         num_meas = size(A{tl},1);
+%         % construct track to measurement assignment matrix at scan tl 
+%         cost = zeros(npre+mcur,num_meas);
+%         % store assignment index of the single target hypothesis with the
+%         % minimum cost in each track
+%         idxCost = zeros(npre+mcur,num_meas);
+%         for j = 1:num_meas
+%             idx = 0;
+%             for i = 1:npre
+%                 is = find(A{tl}(j,idx+1:idx+ns(i))==1);
+%                 if isempty(is)
+%                     % Not found
+%                     cost(i,j) = inf;
+%                 else
+%                     % if found, find the single target hypothesis with the
+%                     % minimum cost, and record its index
+%                     [cost(i,j),idxmin] = min(c_hat(idx+is));
+%                     idxCost(i,j) = idx+is(idxmin);
+%                 end
+%                 idx = idx+ns(i);
+%             end
+%             for i = npre+1:npre+mcur
+%                 is = find(A{tl}(j,idx+1:idx+2)==1);
+%                 if isempty(is)
+%                     cost(i,j) = inf;
+%                 else
+%                     [cost(i,j),idxmin] = min(c_hat(idx+is));
+%                     idxCost(i,j) = idx+is(idxmin);
+%                 end
+%                 idx = idx+2;
+%             end
+%         end
+%         % find the most likely assignment
+%         [assignments,~] = murty_custom(cost-min(cost(:)),1);
+%         indicator = [];
+%         for i = 1:npre+mcur
+%             if assignments(i) > 0
+%                 indicator = cat(1,indicator,idxCost(i,assignments(i)));
+%             end
+%         end
+%         % if a track has no measurement assigned to it, choose the single
+%         % target hypotheses to be non-exist or miss if the track exists
+%         % before scan N-tl
+%         utemp = zeros(H,1);
+%         utemp(indicator) = 1;
+%         idx = 0;
+%         for i = 1:npre
+%             if ~any(utemp(idx+1:idx+ns(i)))
+%                 if length(lupd{idx+1}) >= tl
+%                     tratl = cellfun(@(x) x(end-tl+1),lupd(idx+1:idx+ns(i)));
+%                     missornull = find(tratl==0);
+%                     [~,idxtratl] = min(c_hat(missornull+idx));
+%                     utemp(idx+missornull(idxtratl)) = 1;
+%                 else
+%                     [~,idxmin] = min(c(idx+1:idx+ns(i)));
+%                     utemp(idx+idxmin) = 1;
+%                 end
+%             end
+%             idx = idx+ns(i);
+%         end
+%         for i = 1:mcur
+%             if ~any(utemp(idx+1:idx+2))
+%                 utemp(idx+1) = 1;
+%             end
+%             idx = idx+2;
+%         end
+%         u_hat(:,tl) = utemp;
     end
     
     u_hat_mean = sum(u_hat,2)/maxtralen;
@@ -295,7 +305,7 @@ else
 %     end
     
 end
-
+end
 %%
 
 % single target hypotheses in the ML global association hypotheses updating
@@ -324,27 +334,24 @@ P = cat(3,P,Pnew(:,:,I));
 % hypothesis selected in the ML global hypotheses has consecutive 0
 % label, i.e., missed detection or non-exist, the whole track is pruned.
 
-N = 3; % N-scan pruning
+N = 1; % N-scan pruning
 idx = 0;
 idx_remain = [];
 for i = 1:npre
-    if length(l{i})>=2 && r(i) == 0
+    if r(i) == 0
         % tracks to be pruned
-    elseif length(l{i})>=2 && r(i)<1e-1
+    elseif r(i)<1e-1
         % tracks to be recycled (pruned from MBM)
         lambdau = cat(2,lambdau,r(i)');
         xu = cat(2,xu,x(:,i));
         Pu = cat(3,Pu,P(:,:,i));
-    elseif length(l{i})>=N+1
+    else
         traCompared = l{i}(1:end-N);
         for j = idx+1:idx+ns(i)
             if lupd{j}(1:end-N) == traCompared
                 idx_remain = cat(2,idx_remain,j);
             end
         end
-    else
-        % all kept
-        idx_remain = cat(2,idx_remain,idx+1:idx+ns(i));
     end
     idx = idx+ns(i);
 end

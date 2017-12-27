@@ -97,8 +97,8 @@ for i = 1:n
     end
 end
 
-% Prune zero likelihood single target hypothesis
-idx_keep = wupd>0;
+% Prune single target hypothesis with really small likelihood
+idx_keep = wupd>1e-10;
 rupd = rupd(idx_keep);
 xupd = xupd(:,idx_keep);
 Pupd = Pupd(:,:,idx_keep);

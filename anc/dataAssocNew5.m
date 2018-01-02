@@ -1,5 +1,5 @@
-function [r,x,P,cupd,rupd,xupd,Pupd,lupd,lambdau,xu,Pu,aupd] = dataAssocNew4...
-    (cupd,rupd,xupd,Pupd,lupd,cnew,rnew,xnew,Pnew,lnew,lambdau,xu,Pu,aupd,it)
+function [r,x,P,cupd,rupd,xupd,Pupd,lupd,lambdau,xu,Pu,aupd] = dataAssocNew5...
+    (cupd,rupd,xupd,Pupd,lupd,cnew,rnew,xnew,Pnew,lnew,lambdau,xu,Pu,aupd)
 
 Hpre = length(cupd);        % num of single target hypotheses updating pre-existing tracks
 Hnew = length(cnew);        % num of single target hypotheses updating new tracks
@@ -68,7 +68,7 @@ bt = ones(mcur,1);
 
 maxtralen = max(tralen); % maxtralen-scan data association
 
-slideWindow = 4; % apply sliding window
+slideWindow = 6; % apply sliding window
 maxtralen(maxtralen>slideWindow) = slideWindow;
 
 A = cell(maxtralen,1);
@@ -109,8 +109,10 @@ A = A(~cellfun('isempty',A));
 b = b(~cellfun('isempty',b));
 maxtralen = length(A);
 
+Amatrix = [A0;At];
+
 options = optimoptions('intlinprog','Display','off');
-% u = intlinprog(c,1:length(c),[],[],[A0;At],[b0;bt],zeros(length(c),1),ones(length(c),1),[],options);
+% u = intlinprog(c,1:length(c),[],[],Amatrix,[b0;bt],zeros(length(c),1),ones(length(c),1),[],options);
 % u = round(u);
 
 %%
@@ -128,6 +130,7 @@ if 1
     % initialise gap, maximum num of iteration
     numIteration = 0;
     maxIteration = 2e2;
+    % store the best feasible primal solution obtained so far
     bestPrimalCost = inf;
     
     while (numIteration<maxIteration)
@@ -159,7 +162,7 @@ if 1
                             is = find(A{tl}(j,idx+1:idx+ns(i))==1);
                             if isempty(is)
                                 % Not found
-                                cost(i,j) = 1e3;
+                                cost(i,j) = 1e4;
                             else
                                 % if found, find the single target hypothesis with the
                                 % minimum cost, and record its index
@@ -171,7 +174,7 @@ if 1
                         for i = npre+1:npre+mcur
                             is = find(A{tl}(j,idx+1:idx+2)==1);
                             if isempty(is)
-                                cost(i,j) = 1e3;
+                                cost(i,j) = 1e4;
                             else
                                 [cost(i,j),idxmin] = min(c_hat_nonegative(idx+is));
                                 idxCost(i,j) = idx+is(idxmin);
@@ -182,7 +185,7 @@ if 1
                     % find the most likely assignment
                     costInput = -[cost 1e6*ones(npre+mcur,npre+mcur-num_meas)];
                     costInput = costInput-min(costInput(:));
-                    [assignments,~] = auctionAlgorithm(costInput);
+                    [assignments,~] = auctionAlgorithm_mex(costInput);
                     assignments(assignments>num_meas) = 0;
                     indicator = [];
                     for i = 1:npre+mcur
@@ -218,11 +221,6 @@ if 1
                     end
                     u_hat(:,tl) = utemp;
                     subDualCost(tl) = c_hat'*u_hat(:,tl);
-%                     utest = intlinprog((c/maxtralen+delta(:,tl)),1:length(c),[],[],...
-%                         [A0;A{tl}],[b0;b{tl}],zeros(length(c),1),ones(length(c),1),[],options);
-%                     if ~isequal(u_hat(:,tl),utest)
-%                         1;
-%                     end
             end
         end
         u_hat = round(u_hat);
@@ -236,77 +234,24 @@ if 1
         % second calculate dual cost
         dualCost = sum(subDualCost);
         
-        % find the best feasible primal cost
-        conflictVector = u_hat_mean;
-        % store conflicting single target hypotheses indices
-        conflictTracks = cell(npre+mcur,1);
-        % total number of possible feasible solutions
-        num_feasiblePrimal = 1;
-        
-        idx = 0;
-        % first consider pre-existing tracks
-        for t = 1:npre
-            if ~isempty(find(conflictVector(idx+1:idx+ns(t))~=0&conflictVector(idx+1:idx+ns(t))~=1,1))
-                conflictTracks{t} = (idx+1:idx+ns(t))';
-            end
-            num_feasiblePrimal = num_feasiblePrimal*length(conflictTracks{t});
-            idx = idx+ns(t);
-        end
-        
-        % second consider new tracks
-        for t = npre+1:npre+mcur
-            if ~isempty(find(conflictVector(idx+1:idx+2)~=0&conflictVector(idx+1:idx+2)~=1,1))
-                conflictTracks{t} = (idx+1:idx+2)';
-            end
-            num_feasiblePrimal = num_feasiblePrimal*length(conflictTracks{t});
-            idx = idx+2;
-        end
-        
-        %%%%%%%
-        Amatrix = [A0;At];
-        idx_selectedHypo = conflictVector==1;
+        % find a feasible primal solution using branch&bound
+        idx_selectedHypo = u_hat_mean==1;
+        idx_unselectedHypo = ~idx_selectedHypo;
         idx_usedMeas = sum(Amatrix(:,idx_selectedHypo),2)==1;
-        A_uncertain = Amatrix(~idx_usedMeas,~idx_selectedHypo);
+        A_uncertain = Amatrix(~idx_usedMeas,idx_unselectedHypo);
         b_uncertain = ones(size(A_uncertain,1),1);
         len_uncertain = size(A_uncertain,2);
-        c_uncertain = c(~idx_selectedHypo);
+        c_uncertain = c(idx_unselectedHypo);
         uprimal_uncertain = intlinprog(c_uncertain,1:len_uncertain,[],[],...
             sparse(A_uncertain),b_uncertain,zeros(len_uncertain,1),ones(len_uncertain,1),[],options);
         uprimal_uncertain = round(uprimal_uncertain);
         uprimal = u_hat_mean;
-        uprimal(~idx_selectedHypo) = uprimal_uncertain;
+        uprimal(idx_unselectedHypo) = uprimal_uncertain;
         bestPrimalCosthat = c'*uprimal;
-        %%%%%%%
-        
-        % store indices of uncertain hypotheses
-%         idx_conflictHypo = false(H,1);
-%         idx_conflictHypo(cell2mat(conflictTracks)) = true;
-%         idx_uncertain = idx_conflictHypo;
-%         idx_certain = ~idx_uncertain;
-%         A_certain = [A0;At];
-%         A_uncertain = A_certain(:,idx_uncertain);
-%         A_certain = A_certain(:,idx_certain);
-%         b_uncertain = [b0;bt] - A_certain*u_hat_mean(idx_certain);
-%         len_uncertain = size(A_uncertain,2);
-%         c_uncertain = c(idx_uncertain);
-%         uprimal_uncertain = intlinprog(c_uncertain,1:len_uncertain,[],[],...
-%             sparse(A_uncertain),b_uncertain,zeros(len_uncertain,1),ones(len_uncertain,1),[],options);
-% 
-%         if isempty(uprimal_uncertain)
-%             % if this reconstruction is not feasible, set conflicting new
-%             % tracks to null-hypothesis
-%             1;
-%         else
-%             uprimal_uncertain = round(uprimal_uncertain);
-%             uprimal = u_hat_mean;
-%             uprimal(idx_uncertain) = uprimal_uncertain;
-%             bestPrimalCosthat = c'*uprimal;
-%         end
         
         if bestPrimalCosthat < bestPrimalCost
             bestPrimalCost = bestPrimalCosthat;
         end
-        %%%%%%
         
         gap = (bestPrimalCost - dualCost)/bestPrimalCost;
         if gap < 0.05
@@ -318,13 +263,14 @@ if 1
         g = u_hat - u_hat_mean;
         
         % fourth calculate step size used in subgradient method
-        stepSize = (bestPrimalCosthat - dualCost)/(norm(g)^2)/2;
+        stepSize = (bestPrimalCosthat - dualCost)/(norm(g)^2)/1.5;
         
         % update Lagrange multiplier
         delta = delta + stepSize*g;
         
         numIteration = numIteration+1;
     end
+    
     numIteration
     u = uprimal;
     
@@ -344,6 +290,8 @@ l = lupd(I);
 % single target hypotheses in the ML global association hypotheses
 % updating new tracks
 I = u(Hpre+1:H)==1;
+% recycle new tracks with low existence probability
+
 r = [r;rnew(I)];
 x = [x xnew(:,I)];
 P = cat(3,P,Pnew(:,:,I));
@@ -357,7 +305,7 @@ P = cat(3,P,Pnew(:,:,I));
 % hypothesis selected in the ML global hypotheses has consecutive 0
 % label, i.e., missed detection or non-exist, the whole track is pruned.
 
-N = 3; % N-scan pruning
+N = 5; % N-scan pruning
 idx = 0;
 idx_remain = [];
 for i = 1:npre
@@ -382,5 +330,6 @@ Pupd = Pupd(:,:,idx_remain);
 lupd = lupd(idx_remain);
 cupd = cupd(idx_remain);
 aupd = aupd(idx_remain);
+
 
 end

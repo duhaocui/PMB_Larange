@@ -2,9 +2,9 @@ clc;clear
 dbstop if error
 
 % Set simulation parameters
-Pd = 0.9; % probability of detection
-lfai = 5; % expected number of false alarms per scan
-numtruth = 3; % number of targets
+Pd = 0.75; % probability of detection
+lfai = 10; % expected number of false alarms per scan
+numtruth = 6; % number of targets
 simcasenum = 1; % simulation case 1 or 2 (see paper)
 %simcasenum = 2;
 if (simcasenum == 1) % covariance used for mid-point initialisation
@@ -66,7 +66,7 @@ for t = 1:numTime
     
     % multi(two)-scan data association
     [r_hat,x_hat,P_hat,cupd,rupd,xupd,Pupd,lupd,lambdau,xu,Pu,aupd] = ...
-        dataAssocNew4(cupd,rupd,xupd,Pupd,lupd,cnew,rnew,xnew,Pnew,lnew,lambdau,xu,Pu,aupd,t);
+        dataAssocNew5(cupd,rupd,xupd,Pupd,lupd,cnew,rnew,xnew,Pnew,lnew,lambdau,xu,Pu,aupd);
     
     % Store single target hypotheses of current scan, send to next scan
     % Order: missed detection, single target hypotheses updated by the

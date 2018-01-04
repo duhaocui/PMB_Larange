@@ -60,7 +60,7 @@ model.lambdab = 0.05; % expect one new target to arrive every 20 scans on averag
 model.lfai = lfai; % expected number of false alarms (integral of lambda_fa)
 model.lambda_fa = lfai/volume; % intensity = expected number / state space volume
 
-simlen = 201; % must be odd
+simlen = 101; % must be odd
 midpoint = (simlen+1)/2; 
 numfb = midpoint-1;
 measlog = cell(simlen,1);

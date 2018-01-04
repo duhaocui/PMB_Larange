@@ -15,6 +15,7 @@ end
 
 % Generate truth
 [model,measlog,xlog] = gentruth(Pd,lfai,numtruth,Pmid,simcasenum);
+load('testData7510.mat');
 
 % Initialise filter parameters
 stateDimensions = size(model.xb,1);
@@ -65,8 +66,8 @@ for t = 1:numTime
 %     [r,x,P,aselect] = dataAssocNew(wupd,rupd,xupd,Pupd,aupd,wnew,rnew,xnew,Pnew);
     
     % multi(two)-scan data association
-    [r_hat,x_hat,P_hat,cupd,rupd,xupd,Pupd,lupd,lambdau,xu,Pu,aupd] = ...
-        dataAssocNew5(cupd,rupd,xupd,Pupd,lupd,cnew,rnew,xnew,Pnew,lnew,lambdau,xu,Pu,aupd);
+    [r_hat,x_hat,P_hat,cupd,rupd,xupd,Pupd,lupd,lambdau,xu,Pu,aupd,cnew,rnew,xnew,Pnew,lnew,anew] = ...
+        dataAssocNew5(cupd,rupd,xupd,Pupd,lupd,cnew,rnew,xnew,Pnew,lnew,anew,lambdau,xu,Pu,aupd);
     
     % Store single target hypotheses of current scan, send to next scan
     % Order: missed detection, single target hypotheses updated by the
@@ -91,6 +92,6 @@ for t = 1:numTime
     % Performance evaluation using GOSPA metric
     [gospa_vals(t,:)] = gospa_dist(get_comps(xlog{t},[1 3]),...
         get_comps(xest{t},[1 3]),gospa_c,gospa_p,gospa_alpha);
-    
+    t
     gospa_vals(t,:)
 end

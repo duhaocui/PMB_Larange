@@ -26,7 +26,7 @@ lambdab_threshold = 1e-4;
 [measDimensions,m] = size(z);
 n = length(r);  % number of single target hypotheses to be updated
 % length(r)=length(find(r~=0))+length(find(r==0))
-nupd = length(find(r~=0))*m + length(r); 
+nupd = length(find(r~=0))*m + n; 
 
 % Allocate memory for existing tracks (single target hypotheses)
 % Note no gating--assume any measurement can go with any track
@@ -41,9 +41,6 @@ cupd = zeros(nupd,1);
 % hypothesis being updated, can be used in N-scan pruning
 % Currently, only the latest ancestor information is recorded, i.e., 1-scan
 aupd = zeros(nupd,1);
-
-% No need to record new track ancestor
-% anew = zeros(2*m,1);
 
 % Implement algorithm
 
@@ -82,10 +79,6 @@ for i = 1:n
             iupd = iupd+1;
             v = z(:,j) - H*x(:,i);
             wupd(iupd) = r(i)*Pd*exp(-0.5*v'/S*v)/sqrt_det2piS;
-            % avoid numerical error
-%             if wupd(iupd)==0
-%                 wupd(iupd) = realmin;
-%             end
             cupd(iupd) = c(i)-log(wupd(iupd));
             rupd(iupd) = 1;
             xupd(:,iupd) = x(:,i) + K*v;
@@ -98,7 +91,7 @@ for i = 1:n
 end
 
 % Prune single target hypothesis with really small likelihood
-idx_keep = wupd>1e-10;
+idx_keep = wupd>1e-6;
 rupd = rupd(idx_keep);
 xupd = xupd(:,idx_keep);
 Pupd = Pupd(:,:,idx_keep);
@@ -160,19 +153,19 @@ end
 cnew = -log(wnew);
 
 % If there is no pre-existing track, no need to create non-exist hypothesis
-if isempty(rupd)
-    rnew = rnew(2:2:end);
-    xnew = xnew(:,2:2:end);
-    Pnew = Pnew(:,:,2:2:end);
-    lnew = lnew(2:2:end);
-    cnew = cnew(2:2:end);
-    anew = anew(2:2:end);
-end
+% if isempty(rupd)
+%     rnew = rnew(2:2:end);
+%     xnew = xnew(:,2:2:end);
+%     Pnew = Pnew(:,:,2:2:end);
+%     lnew = lnew(2:2:end);
+%     cnew = cnew(2:2:end);
+%     anew = anew(2:2:end);
+% end
 
 % Update (i.e., thin) intensity of unknown targets
 lambdau = (1-Pd)*lambdau;
 
-% Not shown in paper--truncate low weight components
+% Truncate low weight components
 ss = lambdau > lambdab_threshold;
 lambdau = lambdau(ss);
 xu = xu(:,ss);

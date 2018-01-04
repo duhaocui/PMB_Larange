@@ -1,5 +1,5 @@
-function [r,x,P,cupd,rupd,xupd,Pupd,lupd,lambdau,xu,Pu,aupd] = dataAssocNew5...
-    (cupd,rupd,xupd,Pupd,lupd,cnew,rnew,xnew,Pnew,lnew,lambdau,xu,Pu,aupd)
+function [r,x,P,cupd,rupd,xupd,Pupd,lupd,lambdau,xu,Pu,aupd,cnew,rnew,xnew,Pnew,lnew,anew] = dataAssocNew5...
+    (cupd,rupd,xupd,Pupd,lupd,cnew,rnew,xnew,Pnew,lnew,anew,lambdau,xu,Pu,aupd)
 
 Hpre = length(cupd);        % num of single target hypotheses updating pre-existing tracks
 Hnew = length(cnew);        % num of single target hypotheses updating new tracks
@@ -8,9 +8,9 @@ mcur = Hnew/2;              % num of measurements in current scan
 
 % If there is no pre-existing track
 if Hpre == 0
-    r = rnew(2:2:end);
-    x = xnew(:,2:2:end);
-    P = Pnew(:,:,2:2:end);
+    r = rnew;
+    x = xnew;
+    P = Pnew;
     return;
 end
 
@@ -73,19 +73,20 @@ maxtralen(maxtralen>slideWindow) = slideWindow;
 
 A = cell(maxtralen,1);
 b = cell(maxtralen,1);
-Htl = zeros(maxtralen,1);
+% Htl = zeros(maxtralen,1);
 
 A{1} = At;
 b{1} = bt;
-Htl(1) = H;
+% Htl(1) = H;
 
 for tl = 2:maxtralen
     % get number of single target hypotheses existed at current-tl+1 scan
-    Htemp = length(find(tralen>=tl));
-    Htl(tl) = Htemp;
+    idx = find(tralen>=tl);
+    Htemp = length(idx);
+%     Htl(tl) = Htemp;
     % target trajectory of the current-tl+1 scan, tracks from left to
     % right, old to new
-    tratemp = cellfun(@(x) x(end-tl+1),lupd(1:Htemp));
+    tratemp = cellfun(@(x) x(end-tl+1),lupd(idx));
     % num of measurements in current-tl+1 scan, do not count missed detection and
     % non-exist new track
     measUnique = unique(tratemp(tratemp~=0),'stable');
@@ -127,10 +128,10 @@ if 1
     % subproblem solutions
     u_hat = zeros(H,maxtralen);
     
-    % initialise gap, maximum num of iteration
+    % initialise maximum num of iteration
     numIteration = 0;
-    maxIteration = 2e2;
-    % store the best feasible primal solution obtained so far
+    maxIteration = 1e2;
+    % store the best feasible primal cost obtained so far (upper bound)
     bestPrimalCost = inf;
     
     while (numIteration<maxIteration)
@@ -146,11 +147,10 @@ if 1
                 case 2
                     % implementation using auction
                     c_hat = c/maxtralen+delta(:,tl);
-                    c_hat_nonegative = c_hat - min(c_hat(:));
                     % get number of measurements at scan tl
                     num_meas = size(A{tl},1);
                     % construct track to measurement assignment matrix at scan tl
-                    cost = ones(npre+mcur,num_meas)*1e3;
+                    cost = ones(npre+mcur,num_meas)*1e4;
                     % store assignment index of the single target hypothesis with the
                     % minimum cost in each track
                     idxCost = zeros(npre+mcur,num_meas);
@@ -160,30 +160,25 @@ if 1
                             % find single target hypotheses in track i that use this
                             % measurement
                             is = find(A{tl}(j,idx+1:idx+ns(i))==1);
-                            if isempty(is)
-                                % Not found
-                                cost(i,j) = 1e4;
-                            else
+                            if ~isempty(is)
                                 % if found, find the single target hypothesis with the
                                 % minimum cost, and record its index
-                                [cost(i,j),idxmin] = min(c_hat_nonegative(idx+is));
+                                [cost(i,j),idxmin] = min(c_hat(idx+is));
                                 idxCost(i,j) = idx+is(idxmin);
                             end
                             idx = idx+ns(i);
                         end
                         for i = npre+1:npre+mcur
                             is = find(A{tl}(j,idx+1:idx+2)==1);
-                            if isempty(is)
-                                cost(i,j) = 1e4;
-                            else
-                                [cost(i,j),idxmin] = min(c_hat_nonegative(idx+is));
+                            if ~isempty(is)
+                                [cost(i,j),idxmin] = min(c_hat(idx+is));
                                 idxCost(i,j) = idx+is(idxmin);
                             end
                             idx = idx+2;
                         end
                     end
                     % find the most likely assignment
-                    costInput = -[cost 1e6*ones(npre+mcur,npre+mcur-num_meas)];
+                    costInput = -[cost 1e4*ones(npre+mcur,npre+mcur-num_meas)];
                     costInput = costInput-min(costInput(:));
                     [assignments,~] = auctionAlgorithm_mex(costInput);
                     assignments(assignments>num_meas) = 0;
@@ -204,10 +199,10 @@ if 1
                             if length(lupd{idx+1}) >= tl
                                 tratl = cellfun(@(x) x(end-tl+1),lupd(idx+1:idx+ns(i)));
                                 missornull = find(tratl==0);
-                                [~,idxtratl] = min(c_hat_nonegative(missornull+idx));
+                                [~,idxtratl] = min(c_hat(missornull+idx));
                                 utemp(idx+missornull(idxtratl)) = 1;
                             else
-                                [~,idxmin] = min(c_hat_nonegative(idx+1:idx+ns(i)));
+                                [~,idxmin] = min(c_hat(idx+1:idx+ns(i)));
                                 utemp(idx+idxmin) = 1;
                             end
                         end
@@ -226,6 +221,8 @@ if 1
         u_hat = round(u_hat);
         
         u_hat_mean = sum(u_hat,2)/maxtralen;
+        % All the subproblem solutions are equal means we have found the
+        % optimal solution
         if isempty(find(u_hat_mean~=1&u_hat_mean~=0,1))
             uprimal = u_hat(:,1);
             break;
@@ -237,16 +234,24 @@ if 1
         % find a feasible primal solution using branch&bound
         idx_selectedHypo = u_hat_mean==1;
         idx_unselectedHypo = ~idx_selectedHypo;
-        idx_usedMeas = sum(Amatrix(:,idx_selectedHypo),2)==1;
-        A_uncertain = Amatrix(~idx_usedMeas,idx_unselectedHypo);
+        idx_unusedMeas = sum(Amatrix(:,idx_selectedHypo),2)==0;
+        % if we are certain about the track, remove the single target
+        % hypotheses of it
+        idx = 0;
+        for i = 1:npre
+            if idx_unusedMeas(i) == false
+                idx_unselectedHypo(idx+1:idx+ns(i)) = false;
+            end
+            idx = idx + ns(i);
+        end
+        A_uncertain = Amatrix(idx_unusedMeas,idx_unselectedHypo);
         b_uncertain = ones(size(A_uncertain,1),1);
         len_uncertain = size(A_uncertain,2);
         c_uncertain = c(idx_unselectedHypo);
         uprimal_uncertain = intlinprog(c_uncertain,1:len_uncertain,[],[],...
             sparse(A_uncertain),b_uncertain,zeros(len_uncertain,1),ones(len_uncertain,1),[],options);
-        uprimal_uncertain = round(uprimal_uncertain);
         uprimal = u_hat_mean;
-        uprimal(idx_unselectedHypo) = uprimal_uncertain;
+        uprimal(idx_unselectedHypo) = round(uprimal_uncertain);
         bestPrimalCosthat = c'*uprimal;
         
         if bestPrimalCosthat < bestPrimalCost
@@ -263,7 +268,7 @@ if 1
         g = u_hat - u_hat_mean;
         
         % fourth calculate step size used in subgradient method
-        stepSize = (bestPrimalCosthat - dualCost)/(norm(g)^2)/1.5;
+        stepSize = (bestPrimalCosthat - dualCost)/(norm(g)^2);
         
         % update Lagrange multiplier
         delta = delta + stepSize*g;
@@ -283,15 +288,24 @@ I = u(1:Hpre)==1;
 r = rupd(I);
 x = xupd(:,I);
 P = Pupd(:,:,I);
+a = aupd(I);
 
 % get trajecotries of ML tracks, used for pruning (do not prune new tracks)
 l = lupd(I);
 
+% recycling
+% idx = r~=0&r<0.05;
+% lambdau = [lambdau r(idx)'];
+% xu = [xu x(:,idx)];
+% Pu = cat(3,Pu,P(:,:,idx));
+% r = r(~idx);
+% x = x(:,~idx);
+% P = P(:,:,~idx);
+% a = a(idx);
+
 % single target hypotheses in the ML global association hypotheses
 % updating new tracks
 I = u(Hpre+1:H)==1;
-% recycle new tracks with low existence probability
-
 r = [r;rnew(I)];
 x = [x xnew(:,I)];
 P = cat(3,P,Pnew(:,:,I));
@@ -305,21 +319,24 @@ P = cat(3,P,Pnew(:,:,I));
 % hypothesis selected in the ML global hypotheses has consecutive 0
 % label, i.e., missed detection or non-exist, the whole track is pruned.
 
-N = 5; % N-scan pruning
+N = 4; % N-scan pruning
 idx = 0;
 idx_remain = [];
+nc = 2; % prune null-hypothesis with length no less than nc
 for i = 1:npre
-    if length(l{i}) >=3 && ns(i) == 1 && isequal(l{i}(end-2:end),zeros(3,1))
+    if (length(l{i})>=nc && ns(i)==1 && isequal(l{i}(end-nc+1:end),zeros(nc,1)))
         % prune null-hypothesis
-    elseif length(l{i})>=N+1
-        traCompared = l{i}(1:end-N+1);
-        for j = idx+1:idx+ns(i)
-            if isequal(lupd{j}(1:end-N+1),traCompared)
-                idx_remain = cat(2,idx_remain,j);
-            end
-        end
     else
-        idx_remain = cat(2,idx_remain,idx+1:idx+ns(i));
+        if length(l{i})>=N+1
+            traCompared = l{i}(1:end-N+1);
+            for j = idx+1:idx+ns(i)
+                if isequal(lupd{j}(1:end-N+1),traCompared)
+                    idx_remain = cat(2,idx_remain,j);
+                end
+            end
+        else
+            idx_remain = cat(2,idx_remain,idx+1:idx+ns(i));
+        end
     end
     idx = idx+ns(i);
 end
